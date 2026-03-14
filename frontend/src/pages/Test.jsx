@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { API } from '../config';
+import { useParams, Link } from 'react-router-dom';
+import { API, isStandalone, staticBase } from '../config';
+import { parseQuestions } from '../lib/parseQuestions';
+
+const STANDALONE_STORAGE_KEY = 'math_quiz_submissions';
 
 export default function Test() {
   const { weekId } = useParams();
@@ -13,12 +16,23 @@ export default function Test() {
   const [studentName, setStudentName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
+  const [explainOpen, setExplainOpen] = useState(null); // 题号，打开解析的题目
 
   useEffect(() => {
-    fetch(`${API}/weeks/${weekId}/questions`)
-      .then(r => r.json())
-      .then(setQuestions)
-      .finally(() => setLoading(false));
+    if (isStandalone) {
+      const file = `week_${String(weekId).padStart(2, '0')}.txt`;
+      fetch(`${staticBase}/周末检测/${file}`)
+        .then(r => r.text())
+        .then(parseQuestions)
+        .then(setQuestions)
+        .catch(() => setQuestions([]))
+        .finally(() => setLoading(false));
+    } else {
+      fetch(`${API}/weeks/${weekId}/questions`)
+        .then(r => r.json())
+        .then(setQuestions)
+        .finally(() => setLoading(false));
+    }
   }, [weekId]);
 
   const setAnswer = (index, value) => {
@@ -53,6 +67,14 @@ export default function Test() {
     if (file) setImages(prev => ({ ...prev, [index]: file }));
   };
 
+  const fileToDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+
   const submit = async () => {
     if (!studentName.trim()) {
       alert('请先填写姓名或昵称');
@@ -60,27 +82,59 @@ export default function Test() {
     }
     setSubmitting(true);
     const submitId = `submit_${Date.now()}`;
-    const body = new FormData();
-    body.append('weekId', weekId);
-    body.append('submitId', submitId);
-    body.append('studentName', studentName.trim());
-    body.append('answers', JSON.stringify(
-      questions.map((q, i) => ({
-        index: q.index,
-        type: q.type,
-        answer: answers[q.index],
-        hasImage: !!images[q.index]
-      }))
-    ));
-    questions.forEach((q) => {
-      const file = images[q.index];
-      if (file) body.append(`q${q.index}`, file);
-    });
     try {
-      const r = await fetch(`${API}/submit`, { method: 'POST', body });
-      const data = await r.json();
-      if (data.ok) setSubmitDone(true);
-      else alert(data.error || '提交失败');
+      if (isStandalone) {
+        const answerList = questions.map(q => ({
+          index: q.index,
+          type: q.type,
+          answer: answers[q.index],
+          hasImage: !!images[q.index]
+        }));
+        const imageList = [];
+        for (const q of questions) {
+          const file = images[q.index];
+          if (file) {
+            try {
+              const dataUrl = await fileToDataUrl(file);
+              if (dataUrl.length < 2 * 1024 * 1024) imageList.push({ field: `q${q.index}`, dataUrl });
+            } catch (_) {}
+          }
+        }
+        const record = {
+          weekId,
+          submitId,
+          studentName: studentName.trim(),
+          submittedAt: new Date().toISOString(),
+          answers: answerList,
+          images: imageList
+        };
+        const raw = localStorage.getItem(STANDALONE_STORAGE_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        list.push(record);
+        localStorage.setItem(STANDALONE_STORAGE_KEY, JSON.stringify(list));
+        setSubmitDone(true);
+      } else {
+        const body = new FormData();
+        body.append('weekId', weekId);
+        body.append('submitId', submitId);
+        body.append('studentName', studentName.trim());
+        body.append('answers', JSON.stringify(
+          questions.map(q => ({
+            index: q.index,
+            type: q.type,
+            answer: answers[q.index],
+            hasImage: !!images[q.index]
+          }))
+        ));
+        questions.forEach(q => {
+          const file = images[q.index];
+          if (file) body.append(`q${q.index}`, file);
+        });
+        const r = await fetch(`${API}/submit`, { method: 'POST', body });
+        const data = await r.json();
+        if (data.ok) setSubmitDone(true);
+        else alert(data.error || '提交失败');
+      }
     } catch (e) {
       alert('提交失败：' + e.message);
     } finally {
@@ -88,15 +142,87 @@ export default function Test() {
     }
   };
 
+  // 判断单题对错（填空、选择可自动判，问答题为 null 表示待批改）
+  const isCorrect = (q) => {
+    if (q.type === '问答题') return null;
+    const userAns = String(answers[q.index] ?? '').trim();
+    const rightAns = String(q.answer ?? '').trim();
+    if (q.type === '选择') return userAns.toUpperCase() === rightAns.toUpperCase();
+    if (q.type === '填空') return userAns === rightAns;
+    return false;
+  };
+
+  const correctCount = questions.filter(q => isCorrect(q) === true).length;
+  const autoCount = questions.filter(q => q.type !== '问答题').length;
+
   if (loading) return <div style={styles.center}>加载题目中…</div>;
   if (questions.length === 0) return <div style={styles.center}>本周暂无题目</div>;
   if (submitDone) {
     return (
       <div style={styles.page}>
-        <div style={styles.done}>
-          <h2>提交成功</h2>
-          <p>你的作答已保存，老师可以查看。</p>
-          <a href="/">返回首页</a>
+        <div style={styles.resultHeader}>
+          <h2>答题结果</h2>
+          <p style={styles.resultSummary}>
+            共 {questions.length} 题，自动判题 {autoCount} 题中答对 <strong>{correctCount}</strong> 题
+            {questions.some(q => q.type === '问答题') && '，问答题待老师批改'}
+          </p>
+          {isStandalone && (
+            <p style={styles.standaloneHint}>如需发给老师查看，请返回首页进入「老师入口」导出提交记录后发送给老师。</p>
+          )}
+          <Link to="/" style={styles.backHome}>返回首页</Link>
+        </div>
+        {questions.map((q) => {
+          const correct = isCorrect(q);
+          return (
+            <section
+              key={q.index}
+              style={{
+                ...styles.resultCard,
+                borderLeftColor: correct === true ? '#4caf50' : correct === false ? '#f44336' : '#ff9800'
+              }}
+            >
+              <div style={styles.resultCardHead}>
+                <span style={styles.num}>第 {q.index} 题</span>
+                <span style={styles.knowledge}>{q.knowledge}</span>
+                <span style={{
+                  ...styles.resultBadge,
+                  ...(correct === true ? styles.resultBadgeRight : correct === false ? styles.resultBadgeWrong : styles.resultBadgePending)
+                }}>
+                  {correct === true ? '✓ 正确' : correct === false ? '✗ 错误' : '待批改'}
+                </span>
+              </div>
+              <div style={styles.stem}>{q.stem}</div>
+              <div style={styles.answerRow}>
+                <span>你的答案：</span>
+                <strong>{answers[q.index] != null && answers[q.index] !== '' ? answers[q.index] : '—'}</strong>
+              </div>
+              {(q.type === '填空' || q.type === '选择') && (
+                <div style={styles.answerRow}>
+                  <span>正确答案：</span>
+                  <strong>{q.type === '选择' && q.options?.[q.answer] ? `${q.answer}. ${q.options[q.answer]}` : q.answer}</strong>
+                </div>
+              )}
+              <button
+                type="button"
+                style={styles.explainBtn}
+                onClick={() => setExplainOpen(explainOpen === q.index ? null : q.index)}
+              >
+                {explainOpen === q.index ? '收起解析' : '查看解析'}
+              </button>
+              {explainOpen === q.index && q.explanation && (
+                <div style={styles.explainBox}>
+                  <div style={styles.explainTitle}>解析</div>
+                  <div style={styles.explainContent}>{q.explanation}</div>
+                </div>
+              )}
+              {explainOpen === q.index && !q.explanation && (
+                <div style={styles.explainBox}>暂无解析</div>
+              )}
+            </section>
+          );
+        })}
+        <div style={{ ...styles.done, paddingTop: 24 }}>
+          <Link to="/" style={styles.backHome}>返回首页</Link>
         </div>
       </div>
     );
@@ -289,6 +415,42 @@ const styles = {
     cursor: 'pointer'
   },
   done: { textAlign: 'center', padding: 48 },
+  resultHeader: { textAlign: 'center', marginBottom: 24 },
+  resultSummary: { color: '#555', marginTop: 8, marginBottom: 16 },
+  standaloneHint: { fontSize: 13, color: '#666', marginBottom: 12 },
+  backHome: { color: '#4a90d9', textDecoration: 'none', fontSize: 15 },
+  resultCard: {
+    background: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+    borderLeft: '4px solid #ddd'
+  },
+  resultCardHead: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 },
+  resultBadge: {
+    padding: '2px 10px',
+    borderRadius: 20,
+    fontSize: 13,
+    fontWeight: 'bold'
+  },
+  resultBadgeRight: { background: '#e8f5e9', color: '#2e7d32' },
+  resultBadgeWrong: { background: '#ffebee', color: '#c62828' },
+  resultBadgePending: { background: '#fff3e0', color: '#e65100' },
+  answerRow: { marginTop: 8, fontSize: 14 },
+  explainBtn: {
+    marginTop: 12,
+    padding: '8px 16px',
+    border: '1px solid #4a90d9',
+    borderRadius: 8,
+    background: '#fff',
+    color: '#4a90d9',
+    cursor: 'pointer',
+    fontSize: 14
+  },
+  explainBox: { marginTop: 12, padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: 14 },
+  explainTitle: { fontWeight: 'bold', marginBottom: 8, color: '#333' },
+  explainContent: { whiteSpace: 'pre-wrap', lineHeight: 1.6 },
   modalMask: {
     position: 'fixed',
     inset: 0,

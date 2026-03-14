@@ -1,17 +1,28 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { API } from '../config';
+import { useNavigate, Link } from 'react-router-dom';
+import { API, isStandalone, staticBase } from '../config';
 
 export default function Home() {
   const [weeks, setWeeks] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`${API}/weeks`)
-      .then(r => r.json())
-      .then(setWeeks)
-      .catch(() => setWeeks([]));
+    if (isStandalone) {
+      fetch(`${staticBase}/周末检测/manifest.json`)
+        .then(r => r.json())
+        .then(data => (data.weeks || []).map(id => ({ id, name: `第${parseInt(id, 10)}周` })))
+        .then(setWeeks)
+        .catch(() => setWeeks([]))
+        .finally(() => setLoading(false));
+    } else {
+      fetch(`${API}/weeks`)
+        .then(r => r.json())
+        .then(setWeeks)
+        .catch(() => setWeeks([]))
+        .finally(() => setLoading(false));
+    }
   }, []);
 
   const startTest = () => {
@@ -24,7 +35,8 @@ export default function Home() {
       <p style={styles.subtitle}>请选择周次，开始本周检测</p>
 
       <div style={styles.weekList}>
-        {weeks.length === 0 && <p style={styles.empty}>暂无周次数据，请确保「周末检测」文件夹内有 week_xx.txt</p>}
+        {loading && <p style={styles.empty}>加载中…</p>}
+        {!loading && weeks.length === 0 && <p style={styles.empty}>暂无周次数据，请确保「周末检测」文件夹内有 week_xx.txt 且 manifest.json 已配置</p>}
         {weeks.map(w => (
           <button
             key={w.id}
@@ -47,7 +59,7 @@ export default function Home() {
         开始本周检测
       </button>
 
-      <a href="/teacher" style={styles.teacherLink}>老师入口：查看提交记录</a>
+      <Link to="/teacher" style={styles.teacherLink}>老师入口：查看提交记录</Link>
     </div>
   );
 }

@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:server": "vite build --outDir ../backend/public",
+    "build:pages": "vite build --outDir ../docs",
+    "build:pages:standalone": "vite build --mode standalone --outDir ../docs",
     "preview": "vite preview"
   },
   "dependencies": {

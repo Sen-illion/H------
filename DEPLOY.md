@@ -4,9 +4,11 @@
 
 ---
 
-## 方式一：发布到 GitHub，用 Render 生成可直接玩的链接（推荐）
+## 方式一：发布到 GitHub，用 Render 生成可直接玩的链接
 
 **可以。** 把项目推到 GitHub 后，用 [Render](https://render.com) 连接仓库并部署，就会得到一个**直接能玩的链接**（如 `https://math-weekend-quiz.onrender.com`），弟弟和你用浏览器打开即可。
+
+**关于费用**：Render 有**免费档（Free）**，选 Free 不会扣钱；有时会要求绑信用卡做验证，但免费使用不会扣费。若你不想绑卡或不想用 Render，可以用下面的「方式二」或「方式二-B」。
 
 ### 步骤
 
@@ -48,7 +50,9 @@
 
 ---
 
-## 方式二：同一 WiFi 下临时用（不部署）
+## 方式二：完全免费、不用绑卡 —— 同一 WiFi 或 ngrok 临时链接
+
+### 方式二-A：同一 WiFi（零成本）
 
 - 你和你弟弟在**同一 WiFi**（比如家里）。
 - 你的电脑上**先运行好**后端和前端（见 README）。
@@ -59,11 +63,62 @@
 
 **限制**：你的电脑必须一直开着并运行着前后端；弟弟必须和你在同一 WiFi。适合临时用一下。
 
+### 方式二-B：ngrok 临时公网链接（弟弟不在家也能打开，仍不花钱）
+
+- 你电脑照常跑后端（`cd backend && npm start`）和前端（`cd frontend && npm run dev`）。
+- 到 [ngrok](https://ngrok.com) 免费注册并下载 ngrok，在终端执行：
+  ```bash
+  ngrok http 5173
+  ```
+  会显示一行 **Forwarding** 的地址，如 `https://xxxx.ngrok-free.app`，这就是临时公网链接。
+- 把这条链接发给弟弟，他在外面用手机/电脑打开即可做题（前端会通过 Vite 代理访问你本机的后端，所以只暴露 5173 即可）。
+- **注意**：关掉 ngrok 或重启后链接会变；免费版不扣钱、不强制绑卡。
+
 ---
 
-## 方式三：部署到公网（自己的云服务器）
+## 方式三：用 GitHub Pages 展示前端（需先构建再上传）
 
-把项目放到**一台 24 小时在线的服务器**上，得到一个**公网链接**（如 `https://你的域名.com` 或 `https://xxx.vercel.app`）。这样：
+**核心原因**：项目是 Vite 构建的，GitHub Pages 不会帮你跑 `npm run build`，只能托管**已经构建好的**静态文件。直接推源码上去会 404。
+
+### 必须做的两步
+
+1. **在本地先构建出静态产物**
+   - 若页面要部署在 **`https://用户名.github.io/仓库名/`** 或 **`/frontend/`** 这类子路径下，需要指定 base（否则资源路径错）：
+     ```bash
+     cd frontend
+     # 部署在 /frontend/ 时：
+     set VITE_BASE_PATH=/frontend/
+     npm run build
+     ```
+     （Mac/Linux 用 `export VITE_BASE_PATH=/frontend/`）
+   - 若部署在仓库根（如 `xxx.github.io` 根目录），可省略 base，直接 `npm run build`。
+   - 构建完成后，**产物在 `frontend/dist` 目录**（一堆 HTML/CSS/JS），不是 `src` 或 `node_modules`。
+
+2. **把构建产物推上去**
+   - 把 **`frontend/dist` 里的所有文件**（不是 dist 文件夹本身）复制到你在 GitHub Pages 里配置的目录（例如仓库的 `frontend` 目录、或 `docs`、或 `gh-pages` 分支的根目录）。
+   - 提交并推送，等 GitHub Pages 更新后，用你配置的地址访问（如 `https://sen-illion.github.io/frontend/`）。
+
+### 重要：本项目有后端，GitHub Pages 只能放前端
+
+- **GitHub Pages 只支持静态网页**，不能跑 Node.js，所以**不能**把整站（前端+后端）都放在 GitHub Pages。
+- 若你**只**把前端部署在 GitHub Pages，那么：
+  - **后端必须单独部署**在能跑 Node 的地方（如 Render），否则前端的 `/api` 请求会发到 github.io，得到 404。
+  - 构建前端时要**指定后端地址**，让前端去请求你的后端而不是同源：
+    ```bash
+    cd frontend
+    set VITE_API_BASE=https://你的后端地址.onrender.com
+    set VITE_BASE_PATH=/frontend/
+    npm run build
+    ```
+    再把 `dist` 里的内容上传到 GitHub 对应目录。
+
+- 若希望**一个链接就搞定**（前端+后端一起），建议用 **方式一（Render 整站部署）**，不必用 GitHub Pages。
+
+---
+
+## 方式四：部署到公网（自己的云服务器）
+
+把项目放到**一台 24 小时在线的服务器**上（如腾讯云、阿里云），得到一个**公网链接**（如 `https://你的域名.com` 或 `https://xxx.vercel.app`）。这样：
 
 - **弟弟**：在自己设备浏览器打开这个链接 → 做题、提交（包括拍照）。
 - **你**：在自己设备打开**同一个链接** → 点「老师入口：查看提交记录」→ 查看所有作答和图片。
