@@ -1,0 +1,10 @@
+# Render 部署配置：连接 GitHub 仓库后会自动按此配置部署，得到一个可直接打开的链接
+# 文档：https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: math-weekend-quiz
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    # 题目文件（周末检测文件夹）需放在仓库里，提交记录在免费版重启后可能清空
