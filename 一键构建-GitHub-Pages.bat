@@ -2,8 +2,7 @@
 chcp 65001 >nul
 cd /d "%~dp0frontend"
 
-REM 改成你 GitHub 仓库的真实名字（和 https://sen-illion.github.io/这里/ 一致）
-set VITE_BASE_PATH=/H------/
+REM base 路径已写在 frontend\.env.github，若仓库名变了请改该文件里的 VITE_BASE_PATH
 
 call npm run build:pages:standalone
 if errorlevel 1 (

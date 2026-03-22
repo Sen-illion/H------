@@ -22,18 +22,18 @@
 
 ---
 
-## 二、重新构建（必须带仓库子路径）
+## 二、重新构建
 
-**不要**只运行 `npm run build:pages:standalone`，否则会再次出现 `/assets/...` 打不开的问题。
+在 **`frontend`** 目录执行（**base 路径**已写在 **`frontend/.env.github`**，一般不用再设环境变量）：
 
-**PowerShell：**
 ```powershell
-cd C:\Users\User\Desktop\H数学周末检测\frontend
-$env:VITE_BASE_PATH="/H------/"
+cd frontend
 npm run build:pages:standalone
 ```
 
-**或** 双击项目里的 **`一键构建-GitHub-Pages.bat`**（若仓库名不是 `H------`，先改 bat 里的那一行）。
+**或** 双击 **`一键构建-GitHub-Pages.bat`**。
+
+若仓库名**不是** `H------`，请编辑 **`frontend/.env.github`**，把 `VITE_BASE_PATH=/H------/` 改成你的仓库名。
 
 构建完成后，根目录下的 **`docs`** 会更新（含新的 `周末检测/week_04.txt` 和新的 `manifest.json`）。
 
@@ -66,7 +66,7 @@ git push origin main
 |------|--------|
 | 1 | 写好 `week_0n.txt`，放到 **`frontend/public/周末检测/`** |
 | 2 | 改 **`manifest.json`** 的 `weeks`，加上 `"0n"` |
-| 3 | 设置 **`VITE_BASE_PATH=/你的仓库名/`** 后执行 **`npm run build:pages:standalone`** |
+| 3 | 执行 **`npm run build:pages:standalone`**（仓库名在 **`.env.github`** 里改一次即可） |
 | 4 | **`git add docs` +（可选）`frontend/public/周末检测`** → **`commit`** → **`push`** |
 
 ---
