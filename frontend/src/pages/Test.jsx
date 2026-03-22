@@ -142,13 +142,24 @@ export default function Test() {
     }
   };
 
+  // 填空：标准答案里用「或」分隔多种可接受写法时，与任一分支完全一致即判对
+  const fillAnswerMatches = (userAns, rightAns) => {
+    const u = String(userAns ?? '').trim();
+    const r = String(rightAns ?? '').trim();
+    if (!r) return u === '';
+    if (!r.includes('或')) return u === r;
+    const parts = r.split(/\s*或\s*/).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) return u === r;
+    return parts.some((p) => u === p);
+  };
+
   // 判断单题对错（填空、选择可自动判，问答题为 null 表示待批改）
   const isCorrect = (q) => {
     if (q.type === '问答题') return null;
     const userAns = String(answers[q.index] ?? '').trim();
     const rightAns = String(q.answer ?? '').trim();
     if (q.type === '选择') return userAns.toUpperCase() === rightAns.toUpperCase();
-    if (q.type === '填空') return userAns === rightAns;
+    if (q.type === '填空') return fillAnswerMatches(userAns, rightAns);
     return false;
   };
 
